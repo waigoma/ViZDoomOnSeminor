@@ -17,13 +17,14 @@ import torch.optim as optim
 from tqdm import trange
 
 import vizdoom as vzd
-
+import matplotlib
+import matplotlib.pyplot as plt
 
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 5
-learning_steps_per_epoch = 2000
+train_epochs = 10
+learning_steps_per_epoch = 100
 replay_memory_size = 10000
 
 # NN learning settings
@@ -50,9 +51,38 @@ config_file_path = os.path.join(vzd.scenarios_path, "simpler_basic.cfg")
 # Uses GPU if available
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
-    torch.backends.cudnn.benchmark = True
+    print("GPU available")
+    # torch.backends.cudnn.benchmark = True
 else:
     DEVICE = torch.device("cpu")
+    print("GPU not available")
+
+matplotlib.use('TkAgg')  # バックエンドを設定（必要に応じて 'TkAgg' を変更）
+
+
+# Q値を可視化する関数
+def visualize_q_values(agent, states, preprocess_screen):
+    q_values = agent.q_net(states).cpu().data.numpy()  # Q値を計算
+    # print(q_values.shape)
+    num_actions = agent.action_size  # 行動の数
+    num_states = states.shape[0]  # 状態の数
+
+    # 状態を画像として表示
+    plt.imshow(np.transpose(preprocess_screen, (1, 2, 0)))
+    plt.show()
+    plt.imsave("state.png", preprocess_screen[0], cmap="gray")
+    # plt.imsave('state.png', np.transpose(preprocess_screen, (1, 2, 0)))
+
+    # 各状態に対する行動ごとのQ値をヒートマップで表示
+    for state_index in range(num_states):
+        state_q_values = q_values[state_index]
+        # リシェイプの形状を行動数に合わせる
+        state_q_values = state_q_values.reshape((1, num_actions))  # (1, 8)にリシェイプ
+        plt.figure(figsize=(8, 6))
+        plt.imshow(state_q_values, cmap='viridis', interpolation='nearest')
+        plt.title(f'Q-values for State {state_index}')
+        plt.colorbar()
+        plt.savefig(f'q_values_state_{state_index}.png')
 
 
 def preprocess(img):
@@ -101,45 +131,46 @@ def test(game, agent):
     )
 
 
-def run(game, agent, actions, num_epochs, frame_repeat, steps_per_epoch=2000):
+def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000):
     """
     Run num epochs of training episodes.
     Skip frame_repeat number of frames after each action.
     """
 
-    start_time = time()
+    start_time = time()  # 訓練開始時刻を記録
 
-    for epoch in range(num_epochs):
-        game.new_episode()
-        train_scores = []
-        global_step = 0
-        print("\nEpoch #" + str(epoch + 1))
+    for episode in range(num_episodes):  # 指定されたエピソード数の訓練を繰り返す
+        game.new_episode()  # 新しいゲームエピソードを開始
+        train_scores = []  # エピソードごとのスコアを格納するリスト
+        global_step = 0  # グローバルステップカウンターを初期化
+        print("\nEpoch #" + str(episode + 1))  # 現在のエポックを表示
 
-        for _ in trange(steps_per_epoch, leave=False):
-            state = preprocess(game.get_state().screen_buffer)
-            action = agent.get_action(state)
-            reward = game.make_action(actions[action], frame_repeat)
-            done = game.is_episode_finished()
+        for _ in trange(steps_per_episode, leave=False):  # 指定されたステップ数の間繰り返す
+            state = preprocess(game.get_state().screen_buffer)  # 現在のゲーム画面を前処理
+            action = agent.get_action(state)  # エージェントが行動を選択
+            reward = game.make_action(actions[action], frame_repeat)  # 行動を実行し、報酬を受け取る
+            done = game.is_episode_finished()  # エピソードが終了したかどうかを確認
 
-            if not done:
-                next_state = preprocess(game.get_state().screen_buffer)
+            if not done:  # エピソードが終了していない場合
+                next_state = preprocess(game.get_state().screen_buffer)  # 次のゲーム画面を前処理
             else:
-                next_state = np.zeros((1, 30, 45)).astype(np.float32)
+                next_state = np.zeros((1, 30, 45)).astype(np.float32)  # 終了した場合は空の画面
 
-            agent.append_memory(state, action, reward, next_state, done)
+            agent.append_memory(state, action, reward, next_state, done)  # 経験をメモリに追加
 
-            if global_step > agent.batch_size:
+            if global_step > agent.batch_size:  # メモリがバッチサイズ以上の場合は訓練を開始
                 agent.train()
 
-            if done:
-                train_scores.append(game.get_total_reward())
-                game.new_episode()
+            if done:  # エピソードが終了した場合
+                train_scores.append(game.get_total_reward())  # エピソードの合計報酬を記録
+                game.new_episode()  # 新しいゲームエピソードを開始
 
-            global_step += 1
+            global_step += 1  # グローバルステップを増やす
 
-        agent.update_target_net()
-        train_scores = np.array(train_scores)
+        agent.update_target_net()  # ターゲットネットワークを更新
+        train_scores = np.array(train_scores)  # スコアをNumPy配列に変換
 
+        # エピソードごとの訓練結果を表示
         print(
             "Results: mean: {:.1f} +/- {:.1f},".format(
                 train_scores.mean(), train_scores.std()
@@ -148,13 +179,23 @@ def run(game, agent, actions, num_epochs, frame_repeat, steps_per_epoch=2000):
             "max: %.1f," % train_scores.max(),
         )
 
+        # 各状態に対するQ値を可視化
+        preprocess_screen = preprocess(game.get_state().screen_buffer)
+        state = np.expand_dims(preprocess_screen, axis=0)
+        state = torch.from_numpy(state).float().to(DEVICE)
+        visualize_q_values(agent, state, preprocess_screen)
+
+        # テスト関数を呼び出して訓練の途中結果を表示
         test(game, agent)
-        if save_model:
+
+        if save_model:  # モデルの保存が有効な場合
             print("Saving the network weights to:", model_savefile)
-            torch.save(agent.q_net, model_savefile)
+            torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
+
+        # 経過時間を表示
         print("Total elapsed time: %.2f minutes" % ((time() - start_time) / 60.0))
 
-    game.close()
+    game.close()  # ゲーム環境をクローズして訓練を終了
     return agent, game
 
 
@@ -265,41 +306,44 @@ class DQNAgent:
         self.memory.append((state, action, reward, next_state, done))
 
     def train(self):
-        batch = random.sample(self.memory, self.batch_size)
-        batch = np.array(batch, dtype=object)
+        batch = random.sample(self.memory, self.batch_size)  # メモリからランダムにバッチをサンプリング
+        batch = np.array(batch, dtype=object)  # バッチをNumPy配列に変換
 
-        states = np.stack(batch[:, 0]).astype(float)
-        actions = batch[:, 1].astype(int)
-        rewards = batch[:, 2].astype(float)
-        next_states = np.stack(batch[:, 3]).astype(float)
-        dones = batch[:, 4].astype(bool)
-        not_dones = ~dones
+        states = np.stack(batch[:, 0]).astype(float)  # バッチ内の状態（state）を取得し、前処理
+        actions = batch[:, 1].astype(int)  # バッチ内の行動（action）を取得
+        rewards = batch[:, 2].astype(float)  # バッチ内の報酬（reward）を取得
+        next_states = np.stack(batch[:, 3]).astype(float)  # バッチ内の次の状態（next_state）を取得
+        dones = batch[:, 4].astype(bool)  # バッチ内の終了状態（done）を取得
+        not_dones = ~dones  # バッチ内の未終了状態を示すブールマスク
 
-        row_idx = np.arange(self.batch_size)  # used for indexing the batch
+        row_idx = np.arange(self.batch_size)  # バッチ内のインデックスを生成
 
-        # value of the next states with double q learning
-        # see https://arxiv.org/abs/1509.06461 for more information on double q learning
+        # Double Q Learningのための次の状態の価値を計算
         with torch.no_grad():
             next_states = torch.from_numpy(next_states).float().to(DEVICE)
+            # 次の状態における最適な行動のインデックスを取得
             idx = row_idx, np.argmax(self.q_net(next_states).cpu().data.numpy(), 1)
+            # ターゲットネットワークで次の状態の価値を計算
             next_state_values = self.target_net(next_states).cpu().data.numpy()[idx]
-            next_state_values = next_state_values[not_dones]
+            next_state_values = next_state_values[not_dones]  # 未終了状態のみを選択
 
-        # this defines y = r + discount * max_a q(s', a)
-        q_targets = rewards.copy()
-        q_targets[not_dones] += self.discount * next_state_values
+        # TD誤差を計算して訓練用のターゲットQ値を生成
+        q_targets = rewards.copy()  # 報酬をコピー
+        q_targets[not_dones] += self.discount * next_state_values  # 未終了状態の場合は更新
         q_targets = torch.from_numpy(q_targets).float().to(DEVICE)
 
-        # this selects only the q values of the actions taken
+        # 行動を選択したときのQ値を取得
         idx = row_idx, actions
         states = torch.from_numpy(states).float().to(DEVICE)
         action_values = self.q_net(states)[idx].float().to(DEVICE)
 
+        # 損失を計算してバックプロパゲーションを行い、重みを更新
         self.opt.zero_grad()
         td_error = self.criterion(q_targets, action_values)
         td_error.backward()
         self.opt.step()
 
+        # ε-グリーディ法のε（探索確率）を更新
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
         else:
@@ -328,9 +372,9 @@ if __name__ == "__main__":
             game,
             agent,
             actions,
-            num_epochs=train_epochs,
+            num_episodes=train_epochs,
             frame_repeat=frame_repeat,
-            steps_per_epoch=learning_steps_per_epoch,
+            steps_per_episode=learning_steps_per_epoch,
         )
 
         print("======================================")
