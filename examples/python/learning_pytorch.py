@@ -40,7 +40,7 @@ episodes_to_watch = 10
 
 model_savefile = "./model-doom.pth"
 save_model = True
-load_model = False
+load_model = True
 skip_learning = False
 
 # Configuration file path
@@ -179,11 +179,12 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             "max: %.1f," % train_scores.max(),
         )
 
-        # 各状態に対するQ値を可視化
-        preprocess_screen = preprocess(game.get_state().screen_buffer)
-        state = np.expand_dims(preprocess_screen, axis=0)
-        state = torch.from_numpy(state).float().to(DEVICE)
-        visualize_q_values(agent, state, preprocess_screen)
+        if episode == 9:
+            # 各状態に対するQ値を可視化
+            preprocess_screen = preprocess(game.get_state().screen_buffer)
+            state = np.expand_dims(preprocess_screen, axis=0)
+            state = torch.from_numpy(state).float().to(DEVICE)
+            visualize_q_values(agent, state, preprocess_screen)
 
         # テスト関数を呼び出して訓練の途中結果を表示
         test(game, agent)
@@ -380,24 +381,35 @@ if __name__ == "__main__":
         print("======================================")
         print("Training finished. It's time to watch!")
 
+    total_params = sum(p.numel() for p in agent.q_net.parameters())
+    print("Total number of parameters in agent.q_net:", total_params)
+
+    # temp.text に agent.q_net.parameters() を書き込む
+    # with open('temp.txt', 'w', encoding="utf-8") as f:
+    #     for p in agent.q_net.parameters():
+    #         f.write(str(p.shape))
+    #         f.write(': ')
+    #         f.write(str(p.numel()))
+    #         f.write('\n')
+
     # Reinitialize the game with window visible
     game.close()
-    game.set_window_visible(True)
-    game.set_mode(vzd.Mode.ASYNC_PLAYER)
-    game.init()
-
-    for _ in range(episodes_to_watch):
-        game.new_episode()
-        while not game.is_episode_finished():
-            state = preprocess(game.get_state().screen_buffer)
-            best_action_index = agent.get_action(state)
-
-            # Instead of make_action(a, frame_repeat) in order to make the animation smooth
-            game.set_action(actions[best_action_index])
-            for _ in range(frame_repeat):
-                game.advance_action()
-
-        # Sleep between episodes
-        sleep(1.0)
-        score = game.get_total_reward()
-        print("Total score: ", score)
+    # game.set_window_visible(True)
+    # game.set_mode(vzd.Mode.ASYNC_PLAYER)
+    # game.init()
+    #
+    # for _ in range(episodes_to_watch):
+    #     game.new_episode()
+    #     while not game.is_episode_finished():
+    #         state = preprocess(game.get_state().screen_buffer)
+    #         best_action_index = agent.get_action(state)
+    #
+    #         # Instead of make_action(a, frame_repeat) in order to make the animation smooth
+    #         game.set_action(actions[best_action_index])
+    #         for _ in range(frame_repeat):
+    #             game.advance_action()
+    #
+    #     # Sleep between episodes
+    #     sleep(1.0)
+    #     score = game.get_total_reward()
+    #     print("Total score: ", score)
