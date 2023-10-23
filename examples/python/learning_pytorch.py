@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 learning_rate = 0.00025
 discount_factor = 0.99
 train_epochs = 10
-learning_steps_per_epoch = 100
+learning_steps_per_epoch = 1000
 replay_memory_size = 10000
 
 # NN learning settings
@@ -39,8 +39,8 @@ resolution = (30, 45)
 episodes_to_watch = 10
 
 model_savefile = "./model-doom.pth"
-save_model = True
-load_model = True
+save_model = False
+load_model = False
 skip_learning = False
 
 # Configuration file path
@@ -179,12 +179,12 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             "max: %.1f," % train_scores.max(),
         )
 
-        if episode == 9:
-            # 各状態に対するQ値を可視化
-            preprocess_screen = preprocess(game.get_state().screen_buffer)
-            state = np.expand_dims(preprocess_screen, axis=0)
-            state = torch.from_numpy(state).float().to(DEVICE)
-            visualize_q_values(agent, state, preprocess_screen)
+        # if episode == 9:
+        #     # 各状態に対するQ値を可視化
+        #     preprocess_screen = preprocess(game.get_state().screen_buffer)
+        #     state = np.expand_dims(preprocess_screen, axis=0)
+        #     state = torch.from_numpy(state).float().to(DEVICE)
+        #     visualize_q_values(agent, state, preprocess_screen)
 
         # テスト関数を呼び出して訓練の途中結果を表示
         test(game, agent)

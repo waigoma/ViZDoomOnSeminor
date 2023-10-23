@@ -9,32 +9,37 @@ from random import choice
 
 import vizdoom as vzd
 
+os.chdir("../../scenarios")
+path = os.getcwd()
 
 game = vzd.DoomGame()
 
 # Use CIG example config or your own.
+# game.load_config(path + "/day_map_sec.cfg")
+
 game.load_config(os.path.join(vzd.scenarios_path, "cig.cfg"))
 
-game.set_doom_map("map01")  # Limited deathmatch.
+# game.set_doom_map("daymap")  # Limited deathmatch.
+game.set_doom_map("map01")  # Deathmatch.
 # game.set_doom_map("map02")  # Full deathmatch.
 
 # Start multiplayer game only with your AI
 # (with options that will be used in the competition, details in cig_mutliplayer_host.py example).
 game.add_game_args(
-    "-host 1 -deathmatch +timelimit 10.0 "
+    "-host 1 -deathmatch +timelimit 3.0 "
     "+sv_forcerespawn 1 +sv_noautoaim 1 +sv_respawnprotect 1 +sv_spawnfarthest 1 +sv_nocrouch 1 "
     "+viz_respawn_delay 10 +viz_nocheat 1"
 )
 
 # Bots are loaded from file, that by default is bots.cfg located in the same dir as ViZDoom exe
 # Other location of bots configuration can be specified by passing this argument
-game.add_game_args("+viz_bots_path ../../scenarios/perfect_bots.cfg")
+game.add_game_args("+viz_bots_path ../../scenarios/bots.cfg")
 
 # Name your agent and select color
 # colors: 0 - green, 1 - gray, 2 - brown, 3 - red, 4 - light gray, 5 - light brown, 6 - light red, 7 - light blue
 game.add_game_args("+name AI +colorset 0")
 
-game.set_mode(vzd.Mode.PLAYER)
+game.set_mode(vzd.Mode.SPECTATOR)
 game.set_console_enabled(True)
 
 # game.set_window_visible(False)
@@ -46,14 +51,19 @@ actions = [
     [1, 0, 0, 0, 0, 0, 0, 0, 0],
     [0, 1, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 1, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0],
 ]
 last_frags = 0
 
 # Play with this many bots
-bots = 7
+bots = 2
 
 # Run this many episodes
-episodes = 10
+episodes = 5
 
 for i in range(episodes):
 
