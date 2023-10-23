@@ -23,15 +23,15 @@ import matplotlib.pyplot as plt
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 10
-learning_steps_per_epoch = 1000
+train_epochs = 5
+learning_steps_per_epoch = 200
 replay_memory_size = 10000
 
 # NN learning settings
 batch_size = 64
 
 # Training regime
-test_episodes_per_epoch = 100
+test_episodes_per_epoch = 10
 
 # Other parameters
 frame_repeat = 12
@@ -39,7 +39,11 @@ resolution = (30, 45)
 episodes_to_watch = 10
 
 model_savefile = "./model-doom.pth"
-save_model = False
+
+sec_count = 0
+sec_model_savefile = "./sec_models/model-doom-{}.pth"
+
+save_model = True
 load_model = False
 skip_learning = False
 
@@ -190,8 +194,12 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
         test(game, agent)
 
         if save_model:  # モデルの保存が有効な場合
-            print("Saving the network weights to:", model_savefile)
-            torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
+            global sec_count
+            # print("Saving the network weights to:", model_savefile)
+            # torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
+            print("Saving the network weights to:", sec_model_savefile.format(sec_count))
+            torch.save(agent.q_net, sec_model_savefile.format(sec_count))  # モデルの重みを保存
+            sec_count += 1
 
         # 経過時間を表示
         print("Total elapsed time: %.2f minutes" % ((time() - start_time) / 60.0))
