@@ -20,12 +20,16 @@ import vizdoom as vzd
 import matplotlib
 import matplotlib.pyplot as plt
 
+# path to scenarios
+os.chdir("../../scenarios")
+path = os.getcwd()
+
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 5
-learning_steps_per_epoch = 200
-replay_memory_size = 10000
+train_epochs = 10
+learning_steps_per_epoch = 10000
+replay_memory_size = 100000
 
 # NN learning settings
 batch_size = 64
@@ -43,12 +47,15 @@ model_savefile = "./model-doom.pth"
 sec_count = 0
 sec_model_savefile = "./sec_models/model-doom-{}.pth"
 
-save_model = True
+save_model = False
 load_model = False
 skip_learning = False
 
 # Configuration file path
-config_file_path = os.path.join(vzd.scenarios_path, "simpler_basic.cfg")
+config_file_path = path + "/my_deathmatch.cfg"
+# config_file_path = os.path.join(vzd.scenarios_path, "deadly_corridor.cfg")
+# config_file_path = os.path.join(vzd.scenarios_path, "defend_the_center.cfg")
+# config_file_path = os.path.join(vzd.scenarios_path, "simpler_basic.cfg")
 # config_file_path = os.path.join(vzd.scenarios_path, "rocket_basic.cfg")
 # config_file_path = os.path.join(vzd.scenarios_path, "basic.cfg")
 
@@ -402,22 +409,22 @@ if __name__ == "__main__":
 
     # Reinitialize the game with window visible
     game.close()
-    # game.set_window_visible(True)
-    # game.set_mode(vzd.Mode.ASYNC_PLAYER)
-    # game.init()
-    #
-    # for _ in range(episodes_to_watch):
-    #     game.new_episode()
-    #     while not game.is_episode_finished():
-    #         state = preprocess(game.get_state().screen_buffer)
-    #         best_action_index = agent.get_action(state)
-    #
-    #         # Instead of make_action(a, frame_repeat) in order to make the animation smooth
-    #         game.set_action(actions[best_action_index])
-    #         for _ in range(frame_repeat):
-    #             game.advance_action()
-    #
-    #     # Sleep between episodes
-    #     sleep(1.0)
-    #     score = game.get_total_reward()
-    #     print("Total score: ", score)
+    game.set_window_visible(True)
+    game.set_mode(vzd.Mode.ASYNC_PLAYER)
+    game.init()
+
+    for _ in range(episodes_to_watch):
+        game.new_episode()
+        while not game.is_episode_finished():
+            state = preprocess(game.get_state().screen_buffer)
+            best_action_index = agent.get_action(state)
+
+            # Instead of make_action(a, frame_repeat) in order to make the animation smooth
+            game.set_action(actions[best_action_index])
+            for _ in range(frame_repeat):
+                game.advance_action()
+
+        # Sleep between episodes
+        sleep(1.0)
+        score = game.get_total_reward()
+        print("Total score: ", score)
