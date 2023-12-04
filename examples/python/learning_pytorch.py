@@ -27,29 +27,32 @@ path = os.getcwd()
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 10
-learning_steps_per_epoch = 10000
+train_epochs = 100
+learning_steps_per_epoch = 1000
 replay_memory_size = 100000
 
 # NN learning settings
 batch_size = 64
 
 # Training regime
-test_episodes_per_epoch = 10
+test_episodes_per_epoch = 1
 
 # Other parameters
 frame_repeat = 12
 resolution = (30, 45)
 episodes_to_watch = 10
 
-model_savefile = "./model-doom.pth"
+model_savefile = "./model-doom-3.pth"
 
+save_sec_model = False
 sec_count = 0
 sec_model_savefile = "./sec_models/model-doom-{}.pth"
 
-save_model = False
+save_model = True
 load_model = False
 skip_learning = False
+
+means = []
 
 # Configuration file path
 config_file_path = path + "/my_deathmatch.cfg"
@@ -189,6 +192,7 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             "min: %.1f," % train_scores.min(),
             "max: %.1f," % train_scores.max(),
         )
+        means.append([train_scores.mean(), train_scores.min(), train_scores.max()])
 
         # if episode == 9:
         #     # 各状態に対するQ値を可視化
@@ -200,7 +204,7 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
         # テスト関数を呼び出して訓練の途中結果を表示
         test(game, agent)
 
-        if save_model:  # モデルの保存が有効な場合
+        if save_sec_model:  # モデルの保存が有効な場合
             global sec_count
             # print("Saving the network weights to:", model_savefile)
             # torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
@@ -210,6 +214,10 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
 
         # 経過時間を表示
         print("Total elapsed time: %.2f minutes" % ((time() - start_time) / 60.0))
+
+    if save_model:  # モデルの保存が有効な場合
+        print("Saving the network weights to:", model_savefile)
+        torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
 
     game.close()  # ゲーム環境をクローズして訓練を終了
     return agent, game
@@ -396,8 +404,11 @@ if __name__ == "__main__":
         print("======================================")
         print("Training finished. It's time to watch!")
 
+
     total_params = sum(p.numel() for p in agent.q_net.parameters())
     print("Total number of parameters in agent.q_net:", total_params)
+    for mean in means:
+        print(f"mean: {mean[0]}, min: {mean[1]}, max: {mean[2]}")
 
     # temp.text に agent.q_net.parameters() を書き込む
     # with open('temp.txt', 'w', encoding="utf-8") as f:
