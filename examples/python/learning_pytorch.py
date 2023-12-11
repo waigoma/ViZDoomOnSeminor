@@ -35,14 +35,16 @@ replay_memory_size = 100000
 batch_size = 64
 
 # Training regime
-test_episodes_per_epoch = 1
+isTest = False
+test_episodes_per_epoch = 10
 
 # Other parameters
 frame_repeat = 12
-resolution = (30, 45)
+# resolution = (30, 45)
+resolution = (90, 120)
 episodes_to_watch = 10
 
-model_savefile = "./model-doom-3.pth"
+model_savefile = "./model-doom-120x90.pth"
 
 save_sec_model = False
 sec_count = 0
@@ -161,6 +163,12 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
 
         for _ in trange(steps_per_episode, leave=False):  # 指定されたステップ数の間繰り返す
             state = preprocess(game.get_state().screen_buffer)  # 現在のゲーム画面を前処理
+
+            # 状態を画像として表示
+            # plt.imshow(np.transpose(state, (1, 2, 0)))
+            # plt.show()
+            # plt.imsave("state_45x30.png", state[0], cmap="gray")
+
             action = agent.get_action(state)  # エージェントが行動を選択
             reward = game.make_action(actions[action], frame_repeat)  # 行動を実行し、報酬を受け取る
             done = game.is_episode_finished()  # エピソードが終了したかどうかを確認
@@ -168,7 +176,7 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             if not done:  # エピソードが終了していない場合
                 next_state = preprocess(game.get_state().screen_buffer)  # 次のゲーム画面を前処理
             else:
-                next_state = np.zeros((1, 30, 45)).astype(np.float32)  # 終了した場合は空の画面
+                next_state = np.zeros((1, resolution[0], resolution[1])).astype(np.float32)  # 終了した場合は空の画面
 
             agent.append_memory(state, action, reward, next_state, done)  # 経験をメモリに追加
 
@@ -202,7 +210,8 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
         #     visualize_q_values(agent, state, preprocess_screen)
 
         # テスト関数を呼び出して訓練の途中結果を表示
-        test(game, agent)
+        if isTest:
+            test(game, agent)
 
         if save_sec_model:  # モデルの保存が有効な場合
             global sec_count
@@ -255,10 +264,10 @@ class DuelQNet(nn.Module):
             nn.ReLU(),
         )
 
-        self.state_fc = nn.Sequential(nn.Linear(96, 64), nn.ReLU(), nn.Linear(64, 1))
+        self.state_fc = nn.Sequential(nn.Linear(3400, 64), nn.ReLU(), nn.Linear(64, 1))
 
         self.advantage_fc = nn.Sequential(
-            nn.Linear(96, 64), nn.ReLU(), nn.Linear(64, available_actions_count)
+            nn.Linear(3400, 64), nn.ReLU(), nn.Linear(64, available_actions_count)
         )
 
     def forward(self, x):
@@ -266,9 +275,10 @@ class DuelQNet(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.conv4(x)
-        x = x.view(-1, 192)
-        x1 = x[:, :96]  # input for the net to calculate the state value
-        x2 = x[:, 96:]  # relative advantage of actions in the state
+        # print(x.size())
+        x = x.view(-1, 16*17*25)
+        x1 = x[:, :3400]  # input for the net to calculate the state value
+        x2 = x[:, 3400:]  # relative advantage of actions in the state
         state_value = self.state_fc(x1).reshape(-1, 1)
         advantage_values = self.advantage_fc(x2)
         x = state_value + (
@@ -336,6 +346,14 @@ class DQNAgent:
         states = np.stack(batch[:, 0]).astype(float)  # バッチ内の状態（state）を取得し、前処理
         actions = batch[:, 1].astype(int)  # バッチ内の行動（action）を取得
         rewards = batch[:, 2].astype(float)  # バッチ内の報酬（reward）を取得
+
+        # tmp = batch[:, 3][0]
+        # for batch3 in batch[:, 3]:
+        #     if batch3.shape != tmp.shape:
+        #         print("shape is different")
+        #         print(f"batch3.shape: {batch3.shape}")
+        #         print(f"tmp.shape: {tmp.shape}")
+
         next_states = np.stack(batch[:, 3]).astype(float)  # バッチ内の次の状態（next_state）を取得
         dones = batch[:, 4].astype(bool)  # バッチ内の終了状態（done）を取得
         not_dones = ~dones  # バッチ内の未終了状態を示すブールマスク
