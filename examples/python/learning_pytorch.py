@@ -41,18 +41,34 @@ test_episodes_per_epoch = 10
 # Other parameters
 frame_repeat = 12
 # resolution = (30, 45)
-resolution = (90, 120)
+# features_size = 182
+resolution = (54, 72)
+features_size = 1664
+# resolution = (66, 88)
+# features_size = 2992
+# resolution = (69, 92)
+# features_size = 3456
+# resolution = (72, 96)
+# features_size = 3952
+# resolution = (75, 100)
+# features_size = 4480
+# resolution = (81, 108)
+# features_size = 5280
+# resolution = (90, 120)
+# features_size = 3400
+features_half_size = int(features_size / 2)
+
 episodes_to_watch = 10
 
-model_savefile = "./model-doom-120x90.pth"
+model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_{train_epochs*learning_steps_per_epoch}.pth"
 
 save_sec_model = False
 sec_count = 0
 sec_model_savefile = "./sec_models/model-doom-{}.pth"
 
-save_model = True
-load_model = False
-skip_learning = False
+save_model = False
+load_model = True
+skip_learning = True
 
 means = []
 
@@ -264,10 +280,10 @@ class DuelQNet(nn.Module):
             nn.ReLU(),
         )
 
-        self.state_fc = nn.Sequential(nn.Linear(3400, 64), nn.ReLU(), nn.Linear(64, 1))
+        self.state_fc = nn.Sequential(nn.Linear(features_half_size, 64), nn.ReLU(), nn.Linear(64, 1))
 
         self.advantage_fc = nn.Sequential(
-            nn.Linear(3400, 64), nn.ReLU(), nn.Linear(64, available_actions_count)
+            nn.Linear(features_half_size, 64), nn.ReLU(), nn.Linear(64, available_actions_count)
         )
 
     def forward(self, x):
@@ -276,9 +292,9 @@ class DuelQNet(nn.Module):
         x = self.conv3(x)
         x = self.conv4(x)
         # print(x.size())
-        x = x.view(-1, 16*17*25)
-        x1 = x[:, :3400]  # input for the net to calculate the state value
-        x2 = x[:, 3400:]  # relative advantage of actions in the state
+        x = x.view(-1, features_size)
+        x1 = x[:, :features_half_size]  # input for the net to calculate the state value
+        x2 = x[:, features_half_size:]  # relative advantage of actions in the state
         state_value = self.state_fc(x1).reshape(-1, 1)
         advantage_values = self.advantage_fc(x2)
         x = state_value + (
