@@ -16,7 +16,8 @@ game = vzd.DoomGame()
 
 # Use CIG example config or your own.
 # game.load_config(path + "/day_map_sec.cfg")
-game.load_config(path + "/my_deathmatch.cfg")
+# game.load_config(path + "/my_deathmatch.cfg")
+game.load_config(path + "/cig.cfg")
 
 # game.load_config(os.path.join(vzd.scenarios_path, "cig.cfg"))
 
@@ -61,7 +62,7 @@ actions = [
 last_frags = 0
 
 # Play with this many bots
-bots = 0
+bots = 1
 
 # Run this many episodes
 episodes = 5
