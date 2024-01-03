@@ -25,14 +25,14 @@ os.chdir("../../scenarios")
 path = os.getcwd()
 
 # Configuration file path
-config_file_path = path + "/my_cig.cfg"
-bot_config_file_path = path + "/bots/perfect.cfg"
+config_file_path = f"{path}/my_cig.cfg"
+bot_config_file_path = f"{path}/bots/perfect.cfg"
 map_name = "map01"
 
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 50
+train_epochs = 900
 learning_steps_per_epoch = 1000
 replay_memory_size = 100000
 
@@ -48,16 +48,22 @@ frame_repeat = 4
 resolution = (54, 72)
 features_size = 1664
 features_half_size = int(features_size / 2)
-model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_{train_epochs * learning_steps_per_epoch}_deathmatch.pth"
+# model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_{train_epochs * learning_steps_per_epoch}_deathmatch.pth"
+# model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_deathmatch.pth"
+model_savefile = "./sec_models/model-doom-550.pth"
 
-save_model = True
-load_model = False
-skip_learning = False
+save_model = False
+load_model = True
+skip_learning = True
 
-save_sec_model = False
-sec_count = 0
+# SEC
+save_sec_model = True
+is_sec = False
+sec_save_count = 100
+sec_load_count = 0
 sec_model_savefile = "./sec_models/model-doom-{}.pth"
-episodes_to_watch = 10
+
+episodes_to_watch = 1
 means = []
 
 # Uses GPU if available
@@ -244,12 +250,12 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             test(game, agent)
 
         if save_sec_model:  # モデルの保存が有効な場合
-            global sec_count
+            global sec_save_count
             # print("Saving the network weights to:", model_savefile)
             # torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
-            print("Saving the network weights to:", sec_model_savefile.format(sec_count))
-            torch.save(agent.q_net, sec_model_savefile.format(sec_count))  # モデルの重みを保存
-            sec_count += 1
+            print("Saving the network weights to:", sec_model_savefile.format(sec_save_count))
+            torch.save(agent.q_net, sec_model_savefile.format(sec_save_count))  # モデルの重みを保存
+            sec_save_count += 1
 
         # 経過時間を表示
         print("Total elapsed time: %.2f minutes" % ((time() - start_time) / 60.0))
@@ -342,10 +348,7 @@ class DQNAgent:
         self.criterion = nn.MSELoss()
 
         if load_model:
-            print("Loading model from: ", model_savefile)
-            self.q_net = torch.load(model_savefile)
-            self.target_net = torch.load(model_savefile)
-            self.epsilon = self.epsilon_min
+            self.load_model(model_savefile)
 
         else:
             print("Initializing new model")
@@ -353,6 +356,12 @@ class DQNAgent:
             self.target_net = DuelQNet(action_size).to(DEVICE)
 
         self.opt = optim.SGD(self.q_net.parameters(), lr=self.lr)
+
+    def load_model(self, model_path):
+        print("Loading model from: ", model_path)
+        self.q_net = torch.load(model_path)
+        self.target_net = torch.load(model_path)
+        self.epsilon = self.epsilon_min
 
     def get_action(self, state):
         if np.random.uniform() < self.epsilon:
@@ -422,7 +431,7 @@ class DQNAgent:
             self.epsilon = self.epsilon_min
 
 
-def result():
+def result(last_death=0):
     """
     学習結果
     """
@@ -445,6 +454,13 @@ def result():
         get_state = game.get_state()
 
         # -------------------------
+        # sec section
+        if is_sec and last_death != game.get_game_variable(vzd.GameVariable.DEATHCOUNT):
+            last_death = game.get_game_variable(vzd.GameVariable.DEATHCOUNT)
+            agent.load_model(sec_model_savefile.format(int(last_death)))
+        # -------------------------
+
+        # -------------------------
         # Agent makes action
         state = preprocess(game.get_state().screen_buffer)
         best_action_index = agent.get_action(state)
@@ -461,7 +477,7 @@ def result():
             # Use this to respawn immediately after death, new state will be available.
             game.respawn_player()
 
-    # 結果の表示
+    # 結果の表示 -----------------------------------------
     print("Episode finished.")
     print("************************")
     # エピソードごとの訓練結果を表示
@@ -483,9 +499,11 @@ def result():
             )
     print(f"Total score: {game.get_total_reward()}")
     print("************************")
+    # ----------------------------------------------------
 
     # sleep between episodes
     sleep(1.0)
+    return last_death
 
 
 if __name__ == "__main__":
@@ -524,7 +542,8 @@ if __name__ == "__main__":
         print(f"mean: {mean[0]}, min: {mean[1]}, max: {mean[2]}")
 
     # 結果を観戦する
+    last_death = 0
     for _ in range(episodes_to_watch):
-        result()
+        last_death = result(last_death)
 
     game.close()
