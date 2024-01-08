@@ -8,10 +8,10 @@ while True:
     if "Epoch" in string:
         continue
 
-    string = string.split(",")[0]
+    string = string.split(",")[1]
     # replace "mean: " to "" and convert to float
     # string = float(string.replace("mean: ", "").split(" ")[0])
-    string = float(string.replace("mean: ", ""))
+    string = float(string.replace("total: ", ""))
     rewards.append(string)
 
 # 折れ線グラフ

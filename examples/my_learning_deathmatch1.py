@@ -21,18 +21,32 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 # path to scenarios
-os.chdir("../../scenarios")
+os.chdir("../scenarios")
 path = os.getcwd()
 
 # Configuration file path
-config_file_path = f"{path}/my_cig.cfg"
+config_file_path = f"{path}/1_deathmatch_kill_death.cfg"
 bot_config_file_path = f"{path}/bots/perfect.cfg"
 map_name = "map01"
+tag = "only_kill_death"
+
+# Save model
+save_model = True
+load_model = False
+skip_learning = False
+model_file = f"../models/model-{tag}.pth"
+
+# SEC
+save_sec_model = True
+enable_sec = False
+sec_save_count = 0
+sec_load_count = 0
+sec_model_savefile = f"../models/sec_models/{tag}/model-{{}}.pth"
 
 # Q-learning settings
 learning_rate = 0.00025
 discount_factor = 0.99
-train_epochs = 900
+train_epochs = 800
 learning_steps_per_epoch = 1000
 replay_memory_size = 100000
 
@@ -40,28 +54,14 @@ replay_memory_size = 100000
 batch_size = 32
 
 # Training regime
-isTest = False
-test_episodes_per_epoch = 10
+enable_test = False
+test_episodes_per_epoch = 1
 
 # Other parameters
 frame_repeat = 4
 resolution = (54, 72)
 features_size = 1664
 features_half_size = int(features_size / 2)
-# model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_{train_epochs * learning_steps_per_epoch}_deathmatch.pth"
-# model_savefile = f"./model-doom-{resolution[0]}x{resolution[1]}_deathmatch.pth"
-model_savefile = "./sec_models/model-doom-550.pth"
-
-save_model = False
-load_model = True
-skip_learning = True
-
-# SEC
-save_sec_model = True
-is_sec = False
-sec_save_count = 100
-sec_load_count = 0
-sec_model_savefile = "./sec_models/model-doom-{}.pth"
 
 episodes_to_watch = 1
 means = []
@@ -75,15 +75,14 @@ else:
     DEVICE = torch.device("cpu")
     print("GPU not available")
 
-matplotlib.use('TkAgg')  # バックエンドを設定（必要に応じて 'TkAgg' を変更）
-
 
 # Q値を可視化する関数
 def visualize_q_values(agent, states, preprocess_screen):
-    q_values = agent.q_net(states).cpu().data.numpy()  # Q値を計算
+    matplotlib.use('TkAgg')
+    q_values = agent.q_net(states).cpu().data.numpy()
     # print(q_values.shape)
-    num_actions = agent.action_size  # 行動の数
-    num_states = states.shape[0]  # 状態の数
+    num_actions = agent.action_size
+    num_states = states.shape[0]
 
     # 状態を画像として表示
     plt.imshow(np.transpose(preprocess_screen, (1, 2, 0)))
@@ -178,29 +177,30 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
     Skip frame_repeat number of frames after each action.
     """
 
-    start_time = time()  # 訓練開始時刻を記録
+    start_time = time()
+    latest_death_count = 0
 
     for episode in trange(num_episodes, leave=False):
+        print("\nEpoch #" + str(episode + 1))
+
         # Initialize episode
         game.new_episode()
+        global_step = 0
+
         # bot を追加
         game.send_game_command("removebots")
         game.send_game_command("addbot")
 
-        train_scores = []  # エピソードごとのスコアを格納するリスト
-        global_step = 0  # グローバルステップカウンターを初期化
-
-        print("\nEpoch #" + str(episode + 1))  # 現在のエポックを表示
-
-        # 3 分間のデスマッチを実行
+        # start deathmatch
         while not game.is_episode_finished():
             if game.is_player_dead():
-                train_scores.append(game.get_total_reward())
+                agent.update_target_net()
                 game.respawn_player()
 
             if game.get_state() is None:
                 continue
 
+            # メモリに保存するパラメーター取得
             state = preprocess(game.get_state().screen_buffer)
             action = agent.get_action(state)
             reward = game.make_action(actions[action], frame_repeat)
@@ -211,58 +211,48 @@ def run(game, agent, actions, num_episodes, frame_repeat, steps_per_episode=2000
             else:
                 next_state = np.zeros((1, resolution[0], resolution[1])).astype(np.float32)  # 終了した場合は空の画面
 
-            agent.append_memory(state, action, reward, next_state, done)  # 経験をメモリに追加
+            # メモリに保存
+            agent.append_memory(state, action, reward, next_state, done)
 
-            if global_step > agent.batch_size:  # メモリがバッチサイズ以上の場合は訓練を開始
+            # メモリサイズがバッチサイズ以上になったらトレーニング
+            if global_step > agent.batch_size:
                 agent.train()
 
-            if done:  # エピソードが終了した場合
-                train_scores.append(game.get_total_reward())  # エピソードの合計報酬を記録
-                # game.new_episode()  # 新しいゲームエピソードを開始
+            global_step += 1
 
-            global_step += 1  # グローバルステップを増やす
-
-        agent.update_target_net()  # ターゲットネットワークを更新
-        train_scores = np.array(train_scores)  # スコアをNumPy配列に変換
-
-        # エピソードごとの訓練結果を表示
-        if game.get_game_variable(vzd.GameVariable.DEATHCOUNT) == 0:
-            death_count = 1
-        else:
-            death_count = game.get_game_variable(vzd.GameVariable.DEATHCOUNT)
-        print(
-            "Results: mean: {:.1f} +/- {:.1f},".format(
-                train_scores.mean(), train_scores.std()
-            ),
-            "min: %.1f," % train_scores.min(),
-            "max: %.1f," % train_scores.max(),
-            f"\nfrag: {game.get_game_variable(vzd.GameVariable.FRAGCOUNT)}, " +
-            f"\nkills: {game.get_game_variable(vzd.GameVariable.KILLCOUNT)}, " +
-            f"\ndeaths: {game.get_game_variable(vzd.GameVariable.DEATHCOUNT)}, " +
-            f"\nkill/death: {game.get_game_variable(vzd.GameVariable.KILLCOUNT) / death_count}" +
-            f"\nglobal_step: {global_step}"
-        )
-        print(train_scores)
-        means.append([train_scores.mean(), train_scores.min(), train_scores.max()])
+        # -----------------------------------------
+        # end of episode
+        # -----------------------------------------
+        agent.update_target_net()
+        results = [game.get_total_reward(), global_step]
+        means.append(results)
 
         # テスト関数を呼び出して訓練の途中結果を表示
-        if isTest:
+        if enable_test:
             test(game, agent)
 
         if save_sec_model:  # モデルの保存が有効な場合
             global sec_save_count
-            # print("Saving the network weights to:", model_savefile)
-            # torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
-            print("Saving the network weights to:", sec_model_savefile.format(sec_save_count))
+            print(f"Saving the network weights to: {sec_model_savefile.format(sec_save_count)}")
             torch.save(agent.q_net, sec_model_savefile.format(sec_save_count))  # モデルの重みを保存
             sec_save_count += 1
 
-        # 経過時間を表示
+        print(
+            f"Results:\n"
+            f"  total_reward: {results[0]}, step_mean: {results[0] / global_step}\n" +
+            f"  total_deaths: {game.get_game_variable(vzd.GameVariable.DEATHCOUNT)}\n" +
+            f"  frag: {game.get_game_variable(vzd.GameVariable.FRAGCOUNT)}\n" +
+            f"  death: {game.get_game_variable(vzd.GameVariable.DEATHCOUNT) - latest_death_count}\n" +
+            f"  global_step: {global_step}"
+        )
+
         print("Total elapsed time: %.2f minutes" % ((time() - start_time) / 60.0))
+        latest_death_count = game.get_game_variable(vzd.GameVariable.DEATHCOUNT)
+        # -----------------------------------------
 
     if save_model:  # モデルの保存が有効な場合
-        print("Saving the network weights to:", model_savefile)
-        torch.save(agent.q_net, model_savefile)  # モデルの重みを保存
+        print("Saving the network weights to:", model_file)
+        torch.save(agent.q_net, model_file)  # モデルの重みを保存
 
     game.close()  # ゲーム環境をクローズして訓練を終了
     return agent, game
@@ -348,7 +338,7 @@ class DQNAgent:
         self.criterion = nn.MSELoss()
 
         if load_model:
-            self.load_model(model_savefile)
+            self.load_model(model_file)
 
         else:
             print("Initializing new model")
@@ -385,13 +375,6 @@ class DQNAgent:
         states = np.stack(batch[:, 0]).astype(float)  # バッチ内の状態（state）を取得し、前処理
         actions = batch[:, 1].astype(int)  # バッチ内の行動（action）を取得
         rewards = batch[:, 2].astype(float)  # バッチ内の報酬（reward）を取得
-
-        # tmp = batch[:, 3][0]
-        # for batch3 in batch[:, 3]:
-        #     if batch3.shape != tmp.shape:
-        #         print("shape is different")
-        #         print(f"batch3.shape: {batch3.shape}")
-        #         print(f"tmp.shape: {tmp.shape}")
 
         next_states = np.stack(batch[:, 3]).astype(float)  # バッチ内の次の状態（next_state）を取得
         dones = batch[:, 4].astype(bool)  # バッチ内の終了状態（done）を取得
@@ -455,13 +438,14 @@ def result(last_death=0):
 
         # -------------------------
         # sec section
-        if is_sec and last_death != game.get_game_variable(vzd.GameVariable.DEATHCOUNT):
+        # -------------------------
+        if enable_sec and last_death != game.get_game_variable(vzd.GameVariable.DEATHCOUNT):
             last_death = game.get_game_variable(vzd.GameVariable.DEATHCOUNT)
             agent.load_model(sec_model_savefile.format(int(last_death)))
-        # -------------------------
 
         # -------------------------
         # Agent makes action
+        # -------------------------
         state = preprocess(game.get_state().screen_buffer)
         best_action_index = agent.get_action(state)
 
@@ -469,7 +453,6 @@ def result(last_death=0):
         game.set_action(actions[best_action_index])
         for _ in range(frame_repeat):
             game.advance_action()
-        # -------------------------
 
         # Check if player is dead
         if game.is_player_dead():
@@ -477,7 +460,9 @@ def result(last_death=0):
             # Use this to respawn immediately after death, new state will be available.
             game.respawn_player()
 
-    # 結果の表示 -----------------------------------------
+    # -------------------------
+    # 結果
+    # -------------------------
     print("Episode finished.")
     print("************************")
     # エピソードごとの訓練結果を表示
@@ -536,10 +521,11 @@ if __name__ == "__main__":
         print("======================================")
         print("Training finished. It's time to watch!")
 
-    total_params = sum(p.numel() for p in agent.q_net.parameters())
-    print("Total number of parameters in agent.q_net:", total_params)
+    # total_params = sum(p.numel() for p in agent.q_net.parameters())
+    # print("Total number of parameters in agent.q_net:", total_params)
+
     for mean in means:
-        print(f"mean: {mean[0]}, min: {mean[1]}, max: {mean[2]}")
+        print(f"mean: {mean[0]/mean[1]}, total: {mean[0]}, steps: {mean[1]}")
 
     # 結果を観戦する
     last_death = 0
