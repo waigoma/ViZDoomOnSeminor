@@ -31,13 +31,13 @@ map_name = "map01"
 tag = "only_kill_death_shot_unclip"
 
 # Save model
-save_model = True
+save_model = False
 load_model = False
-skip_learning = False
+skip_learning = True
 model_file = f"../models/model-{tag}.pth"
 
 # SEC
-save_sec_model = True
+save_sec_model = False
 enable_sec = False
 sec_save_count = 0
 sec_load_count = 0
