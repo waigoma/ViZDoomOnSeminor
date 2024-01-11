@@ -25,10 +25,10 @@ os.chdir("../scenarios")
 path = os.getcwd()
 
 # Configuration file path
-config_file_path = f"{path}/0_deathmatch_kill.cfg"
+config_file_path = f"{path}/0_deathmatch_kill_no_wall.cfg"
 bot_config_file_path = f"{path}/bots/perfect.cfg"
 map_name = "map01"
-tag = "only_kill"
+tag = "only_kill_shot"
 
 # Save model
 save_model = True
@@ -44,9 +44,9 @@ sec_load_count = 0
 sec_model_savefile = f"../models/sec_models/{tag}/model-{{}}.pth"
 
 # Q-learning settings
-learning_rate = 0.025
+learning_rate = 0.0025
 discount_factor = 0.99
-train_epochs = 800
+train_epochs = 100
 learning_steps_per_epoch = 1000
 replay_memory_size = 100000
 
@@ -58,7 +58,7 @@ enable_test = False
 test_episodes_per_epoch = 1
 
 # Other parameters
-frame_repeat = 8
+frame_repeat = 4
 resolution = (54, 72)
 features_size = 1664
 features_half_size = int(features_size / 2)
@@ -345,7 +345,7 @@ class DQNAgent:
             self.q_net = DuelQNet(action_size).to(DEVICE)
             self.target_net = DuelQNet(action_size).to(DEVICE)
 
-        self.opt = optim.SGD(self.q_net.parameters(), lr=self.lr)
+        self.opt = optim.Adam(self.q_net.parameters(), lr=self.lr)
 
     def load_model(self, model_path):
         print("Loading model from: ", model_path)

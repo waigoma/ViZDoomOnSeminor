@@ -44,9 +44,9 @@ sec_load_count = 0
 sec_model_savefile = f"../models/sec_models/{tag}/model-{{}}.pth"
 
 # Q-learning settings
-learning_rate = 0.025
+learning_rate = 0.25
 discount_factor = 0.99
-train_epochs = 800
+train_epochs = 100
 learning_steps_per_epoch = 1000
 replay_memory_size = 100000
 
